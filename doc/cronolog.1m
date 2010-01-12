@@ -1,0 +1,257 @@
+.\" -*- nroff -*-
+.\" $Id: cronolog.1m,v 1.5 1999/12/20 09:03:50 andrew Exp $
+.\" Copyright (c) 1999 Apache Software Foundation
+.\" Copyright (c) 1996-1999 Andrew Ford and Ford & Mason Ltd.
+.\" The file License specifies the terms and conditions for redistribution.
+.TH cronolog 1m "March 1998"
+
+.SH NAME
+cronolog \- write log messages to log files named according to a template
+
+.SH SYNOPSIS
+cronolog [\fIOPTION\fR]... \fItemplate\fR
+
+.SH DESCRIPTION
+.B cronolog
+is a simple program that reads log messages from its input and writes
+them to a set of output files, the names of which are constructed
+using
+.B template
+and the current date and time.  The template uses the same format
+specifiers as the Unix
+.BR date (1)
+command (which are the same as the standard C strftime library
+function).  
+.PP
+Before writing a message
+.B cronolog
+checks the time to see whether the current log file is still valid and
+if not it closes the current file, expands the template using the
+current date and time to generate a new file name, opens the new file
+(creating missing directories on the path of the new log file as
+needed unless the program is compiled with -DDONT_CREATE_SUBDIRS) and
+calculates the time at which the new file will become invalid.
+.PP
+.B cronolog
+is intended to be used in conjunction with a Web server, such as
+Apache to split the access log into daily or monthly logs.  For
+example the Apache configuration directives:
+.LP
+        TransferLog "|/www/sbin/cronolog /www/logs/%Y/%m/%d/access.log"
+        ErrorLog    "|/www/sbin/cronolog /www/logs/%Y/%m/%d/errors.log"
+.LP
+would instruct Apache to pipe its access and error log messages into
+separate copies of cronolog, which would create new log files each day
+in a directory hierarchy structured by date, i.e. on 31 December 1996
+messages would be written to
+.LP
+        /www/logs/1996/12/31/access.log
+        /www/logs/1996/12/31/errors.log
+.P
+after midnight the files
+.LP
+        /www/logs/1997/01/01/access.log
+        /www/logs/1997/01/01/errors.log
+.P
+would be used, with the directories 1997, 1997/01 and 1997/01/01 being
+created if they did not already exist.  (Note that prior to version 1.2 Apache
+did not allow a program to be specified as the argument of the
+ErrorLog directive.)
+
+.SH Options
+.C cronolog
+accepts the following options and arguments:
+.\"
+.IP "-H \fINAME\fP"
+.IP "--hardlink=\fINAME\fP"
+maintain a hard link from
+.I NAME
+to the current log file.
+.\"
+.IP "-S \fINAME\fP"
+.IP "--symlink=\fINAME\fP"
+.IP "-l \fINAME\fP"
+.IP "--link=\fINAME\fP"
+maintain a symbolic link from 
+.I NAME
+to the current log file.
+.\"
+.IP "-P \fINAME\fP"
+.IP "--prevlink=\fINAME\fP"
+maintain a symbolic link from 
+.I NAME
+to the previous log file.  Requires that the
+.B "--symlink"
+option is specified, as cronolog renames the current link to the name
+specified for the previous link.
+.\"
+.IP -h
+.IP --help
+print a help message and then exit.
+.\"
+.IP "-p \fIPERIOD\fP"
+.IP "--period=\fIPERIOD\fP"
+specifies the period explicitly as an optional digit string followed
+by one of units: \fBseconds\fP, \fBminutes\fP, \fBhours\fP,
+\fBdays\fP, \fBweeks\fP or \fBmonths\fP.  The count cannot be greater
+than the number of units in the next larger unit, i.e. you cannot
+specify "120 minutes", and for seconds, minutes and hours the count
+must be a factor of the next higher unit, i.e you can specify 1, 2, 3,
+4, 5, 6, 10, 15, 20 or 30 minutes but not say 7 minutes.
+.\"
+.IP "-d \fIPERIOD\fP"
+.IP "--delay=\fIPERIOD\fP"
+specifies the delay from the start of the period before the log file
+is rolled over.  For example specifying (explicitly or implicitly) a
+period of 15 minutes and a delay of 5 minutes results in the log files
+being rotated at five past, twenty past, twentyfive to and ten to each
+hour.   The delay cannot be longer than the period.
+.\"
+.IP "-o"
+.IP "--once-only"
+create single output log from template, which is not rotated.
+.\"
+.IP "-x FILE"
+.IP "--debug=\fIFILE\fP"
+write debug messages to 
+.I FILE
+or to the standard error stream if 
+.I FILE 
+is "-".  (See the README file for more details.)
+.\"
+.IP "-s TIME"
+.IP "--start-time=\fITIME\fP"
+pretend that the starting time is
+.I TIME
+(for debugging purposes).
+.I TIME should be something like "DD MONTH YYYY HH:MM:SS" (the day and
+month are reversed if the american option is specified).  If the
+seconds are omitted then they are taken as zero and if the hours and
+minutes are omitted then the time of day is taken as 00:00:00
+(i.e. midnight).  The day, month and year can be separated by spaces,
+hyphens (-) or solidi (/).
+.\"
+.IP -a
+.IP --american
+Interprete the date part of the starting time the American way (month
+then day).
+.IP -e
+.IP --european
+Interprete the date part of the starting time the European way (day
+then month).  This is the default.
+.\"
+.IP -v
+.IP --version
+print version information and exit.
+.\"
+.\"
+.\" .IP "-p \fIprogram\fP"
+.\" postprocess each logfile using program once a new logfile is created.
+.\" \fIprogram\fP is invoked with the name of the previous logfile as its
+.\" argument.
+.\"
+.\"
+.SH Template format
+Each character in the template represents a character in the expanded
+filename, except for date and time format specifiers, which are
+replaced by their expansion.  Format specifiers consist of a `%'
+followed by one of the following characters:
+.IP %
+a literal % character
+.IP n
+a new-line character
+.IP t
+a horizontal tab character
+.PP
+Time fields:
+.IP H
+hour (00..23)
+.IP I
+hour (01..12)
+.IP p
+the locale's AM or PM indicator
+.IP M
+minute (00..59)
+.IP S
+second (00..61, which allows for leap seconds)
+.IP X
+the locale's time representation (e.g.: "15:12:47")
+.IP Z
+time zone (e.g. GMT), or nothing if the time zone cannot be determined
+.PP
+Date fields:
+.IP a
+the locale's abbreviated weekday name (e.g.: Sun..Sat)
+.IP A
+the locale's full weekday name (e.g.: Sunday .. Saturday)
+.IP b
+the locale's abbreviated month name (e.g.: Jan .. Dec)
+.IP B
+the locale's full month name, (e.g.: January .. December)
+.IP c
+the locale's date and time (e.g.: "Sun Dec 15 14:12:47 GMT 1996")
+.IP d
+day of month (01 .. 31)
+.IP j
+day of year (001 .. 366)
+.IP m
+month (01 .. 12)
+.IP U
+week of the year with Sunday as first day of week (00..53, where week
+1 is the week containing the first Sunday of the year)
+.IP W
+week of the year with Monday as first day of week (00..53, where week
+1 is the week containing the first Monday of the year)
+.IP w
+day of week (0 .. 6, where 0 corresponds to Sunday)
+.IP x
+locale's date representation (e.g. today in April in Britain: "13/04/97")
+.IP y
+year without the century (00 .. 99)
+.IP Y
+year with the century (1970 .. 2038)
+.P
+Other specifiers may be available depending on the C library's
+implementation of the
+.B strftime
+function.
+.P
+.SH SEE ALSO
+.BR apache (1m)
+.BR date (1)
+.BR strftime (3)
+.BR environ (5)
+.PP
+More information and the latest version of 
+.B cronolog 
+can be obtained from
+.LP
+        http://www.ford-mason.co.uk/resources/cronolog/
+.LP
+If you have any suggestions, bug reports, fixes, or enhancements,
+please mail them to the author.
+.SS More about Apache
+Documentation for the Apache http server is available from
+.LP
+        http://www.apache.org
+.\"
+.SH FUTURE DIRECTIONS
+The functionality of
+.B cronolog
+could be built into Apache, thus saving the overhead of having a
+process per log stream and that of transferring data from the server
+process to the cronolog process.  The main complication is handling
+the case where multiple log streams are written to the same file
+(template), for example where different virtual servers write to the
+same set of log files.
+.SH AUTHOR
+Andrew Ford <A.Ford@ford-mason.co.uk>
+.LP
+.B cronolog
+is based on a program called
+.B rotatelogs
+by Ben Laurie, which is packaged with the Apache web server.
+.LP
+The symbolic link
+.\" and postprocessing options were
+option was suggested by Juergen Lesny.

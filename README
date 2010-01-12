@@ -1,0 +1,244 @@
+CRONOLOG version 1.6.1
+
+"cronolog" is a simple program that reads log messages from its input
+and writes them to a set of output files, the names of which are
+constructed using template and the current date and time.  The
+template uses the same format specifiers as the Unix date command
+(which are the same as the standard C strftime library function).
+
+"cronolog" is intended to be used in conjunction with a Web server, such
+as Apache to split the access log into daily or monthly logs. For
+example the Apache configuration directives:
+
+	TransferLog "|/www/sbin/cronolog /www/logs/%Y/%m/%d/access.log"
+	ErrorLog    "|/www/sbin/cronolog /www/logs/%Y/%m/%d/errors.log"
+
+would instruct Apache to pipe its access and error log messages into
+separate copies of cronolog, which would create new log files each day
+in a directory hierarchy structured by date, i.e. on 31 December 1996
+messages would be written to
+
+	/www/logs/1996/12/31/access.log
+	/www/logs/1996/12/31/errors.log
+
+after midnight the files
+
+	/www/logs/1997/01/01/access.log
+	/www/logs/1997/01/01/errors.log
+
+would be used, with the directories 1997, 1997/01 and 1997/01/01 being
+created if they did not already exist.
+
+Each character in the template represents a character in the expanded
+filename, except for date and time format specifiers, which are
+replaced by their expansion.  Format specifiers consist of a `%'
+followed by one of the following characters:
+
+ %	a literal % character
+ n	a new-line character
+ t	a horizontal tab character
+
+Time fields:
+
+ H 	hour (00..23)
+ I 	hour (01..12)
+ p 	the locale's AM or PM indicator
+ M 	minute (00..59)
+ S 	second (00..61, which allows for leap seconds)
+ X 	the locale's time representation (e.g.: "15:12:47")
+ Z 	time zone (e.g. GMT), or nothing if the time zone cannot be determined
+
+Date fields:
+
+ a 	the locale's abbreviated weekday name (e.g.: Sun..Sat)
+ A 	the locale's full weekday name (e.g.: Sunday .. Saturday)
+ b 	the locale's abbreviated month name (e.g.: Jan .. Dec)
+ B 	the locale's full month name, (e.g.: January .. December)
+ c 	the locale's date and time (e.g.: "Sun Dec 15 14:12:47 GMT 1996")
+ d 	day of month (01 .. 31)
+ j 	day of year (001 .. 366)
+ m 	month (01 .. 12)
+ U 	week of the year with Sunday as first day of week (00..53, where
+	week 1 is the week containing the first Sunday of the year)
+ W 	week of the year with Monday as first day of week (00..53, where
+	week 1 is the week containing the first Monday of the year)
+ w 	day of week (0 .. 6, where 0 corresponds to Sunday)
+ x 	locale's date representation (e.g. today in Britain: "15/12/96")
+ y 	year without the century (00 .. 99)
+ Y 	year with the century (1970 .. 2038)
+
+Other specifiers may be available depending on the C library's
+implementation of the strftime function.  Before writing a message
+cronolog checks the time to see whether the current log file is still
+valid and if not it closes the current file, expands the template
+using the current date and time to generate a new file name, opens the
+new file (creating missing directories on the path of the new log file
+as needed unless the program is compiled with -DDONT_CREATE_SUBDIRS)
+and calculates the time at which the new file will become invalid.
+
+The most up-to-date version of "cronolog" can be found at:
+
+	http://www.ford-mason.co.uk/resources/cronolog/
+
+
+INSTALLATION
+============
+
+Cronolog uses GNU autoconf, so it is configured and built
+with the standard sequence:
+
+	./configure
+	make
+
+To install type "make install" or simply copy the executable
+"src/cronolog" to a suitable directory.
+
+Cronolog has a number of options that can be set either by including
+in CFLAGS when configuring, or by editing the file "src/config.h":
+
+	-DFILE_MODE=octal-number	mode used for creating files (default is 0664)
+	-DDIR_MODE=octal-number		mode used for creating directories (default is 0775)
+	-DDONT_CREATE_SUBDIRS		don't include code to create missing directories
+	-DNEED_GETOPT_DEFS		if your platform doesn't declare getopt()
+
+e.g. to set the file mode to 0600:
+
+	CFLAGS="-O2 -DFILE_MODE=0600" ./configure
+
+
+TESTING
+=======
+
+The package includes a simple test harness program (cronotest), which
+tests out the lower level functions and prints out debugging
+information.  The test program is run with the command line:
+
+	cronotest [-d] "template" count
+
+template is the filename template and count is the number of periods
+to evaluate, for example:
+
+	$ cronotest "%Y/%m/%d/access.log" 4
+	Determining periodicity of "%Y/%m/%d/access.log"
+	%Y -> yearly
+	%m -> monthly
+	%d -> daily
+	Rotation period is per day
+	Start time is Sun Dec 15 15:55:43 1996 (850665343)
+	Period   1 starts at Sun Dec 15 00:00:00 1996 (850608000):  "1996/12/15/access.log"
+	Period   2 starts at Mon Dec 16 00:00:00 1996 (850694400):  "1996/12/16/access.log"
+	Period   3 starts at Tue Dec 17 00:00:00 1996 (850780800):  "1996/12/17/access.log"
+	Period   4 starts at Wed Dec 18 00:00:00 1996 (850867200):  "1996/12/18/access.log"
+
+Specifying the flag -d instructs the test program to create missing
+subdirectories, for example, having created a directory 1996:
+
+	$ cronotest -d  "%Y/%m/%d/access.log" 4
+	Determining periodicity of "%Y/%m/%d/access.log"
+	%Y -> yearly
+	%m -> monthly
+	%d -> daily
+	Rotation period is per day
+	Start time is Sun Dec 15 16:00:21 1996 (850665621)
+	Period   1 starts at Sun Dec 15 00:00:00 1996 (850608000):  "1996/12/15/access.log"
+	Creating missing components of 1996/12/15/access.log
+	Testing directory "1996"
+	Testing directory "1996/12"
+	Directory "1996/12" does not exist -- creating
+	Testing directory "1996/12/15"
+	Directory "1996/12/15" does not exist -- creating
+	Period   2 starts at Mon Dec 16 00:00:00 1996 (850694400):  "1996/12/16/access.log"
+	Creating missing components of 1996/12/16/access.log
+	Initial prefix "1996" known to exist
+	Initial prefix "1996/12" known to exist
+	Testing directory 1996/12/16
+	Directory "1996/12/16" does not exist -- creating
+	Period   3 starts at Tue Dec 17 00:00:00 1996 (850780800):  "1996/12/17/access.log"
+	Creating missing components of 1996/12/17/access.log
+	Initial prefix "1996" known to exist
+	Initial prefix "1996/12" known to exist
+	Testing directory 1996/12/17
+	Directory "1996/12/17" does not exist -- creating
+	Period   4 starts at Wed Dec 18 00:00:00 1996 (850867200):  "1996/12/18/access.log"
+	Creating missing components of 1996/12/18/access.log
+	Initial prefix "1996" known to exist
+	Initial prefix "1996/12" known to exist
+	Testing directory 1996/12/18
+	Directory "1996/12/18" does not exist -- creating
+
+
+Extra debugging code was added to cronolog at version 1.5b8 to
+facilitate interactive testing.  To activate this cronolog must be
+must be invoked with -x (use -x- to send debug messages to stderr).
+In this mode each time it reads a message cronolog will print a
+message giving the current time, the start of the next period and the
+number of seconds until the start of the next period.  This option is
+obviously not very useful when cronolog is being used for a production
+server handling several thousands or millions of requests a day, but
+can be useful for checking that cronolog is working correctly.  You
+could set up a virtual server that was only used for testing and
+periodically send it a request.  The -s option allows a start time to
+be specified -- cronolog will pretend that that is the current time.
+
+The following transcript shows how cronolog can be used for such a
+test.  Lines prefixed by "**" are the lines I typed.  The log file
+template creates a new log file every minute in a new directory.  I
+specified a start time a minute before the change from GMT to BST
+(British Summer Time).
+
+ ** [andrew@icarus src]$ cronolog -x- -s "29 March 1998 00:59" \
+        "tmp/%Y.%m.%d/%H:%M/%Y.%m.%d-%H:%M-access.log"
+    cronolog version 1.5b8
+
+    Copyright (C) 1997 Ford & Mason Ltd.
+    This is free software; see the source for copying conditions.
+    There is NO warranty; not even for MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE.
+
+    Written by Andrew Ford <A.Ford@ford-mason.co.uk>
+
+    The latest version can be found at:
+
+	http://www.ford-mason.co.uk/resources/cronolog/
+
+    Using offset of 1606971 seconds from real time
+    Determining periodicity of "tmp/%Y.%m.%d/%H:%M/%Y.%m.%d-%H:%M-access.log"
+    %Y -> yearly
+    %m -> monthly
+    %d -> daily
+    %H -> hourly
+    %M -> per minute
+    periodicity = minute
+ ** MESSAGE ONE
+    1998/03/29-00:59:04 GMT (891133144): using log file \
+        "tmp/1998.03.29/00:59/1998.03.29-00:59-access.log" \
+        until 1998/03/29-02:00:00 BST (891133200) (for 56 secs)
+    Creating missing components of "tmp/1998.03.29/00:59/1998.03.29-00:59-access.log"
+    Testing directory "tmp"
+    Directory "tmp" does not exist -- creating
+    Testing directory "tmp/1998.03.29"
+    Directory "tmp/1998.03.29" does not exist -- creating
+    Testing directory "tmp/1998.03.29/00:59"
+    Directory "tmp/1998.03.29/00:59" does not exist -- creating
+    1998/03/29-00:59:04 GMT (891133144): wrote message; \
+        next period starts at 1998/03/29-02:00:00 BST (891133200) in 56 secs
+ ** MESSAGE TWO
+    1998/03/29-00:59:32 GMT (891133172): wrote message; \
+        next period starts at 1998/03/29-02:00:00 BST (891133200) in 28 secs
+ ** MESSAGE THREE
+    1998/03/29-02:00:00 BST (891133200): using log file \
+        "tmp/1998.03.29/02:00/1998.03.29-02:00-access.log" \
+        until 1998/03/29-02:01:00 BST (891133260) (for 60 secs)
+    Creating missing components of "tmp/1998.03.29/02:00/1998.03.29-02:00-access.log"
+    Initial prefix "tmp" known to exist
+    Initial prefix "tmp/1998.03.29" known to exist
+    Testing directory "tmp/1998.03.29/02:00"
+    Directory "tmp/1998.03.29/02:00" does not exist -- creating
+    1998/03/29-02:00:00 BST (891133200): wrote message; \
+        next period starts at 1998/03/29-02:01:00 BST (891133260) in 60 secs
+
+This output shows cronolog:
+ * checking the periodicity of the log file template
+ * creating missing directories for new log files
+ * skipping stat() tests on directories it "knows" already exist
+ * recalculating the time until a new log file needs to be opened
